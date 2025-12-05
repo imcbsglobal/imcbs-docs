@@ -22,7 +22,7 @@ Complete step-by-step guide to integrate Cloudflare R2 object storage with Djang
 1. Log in to your [Cloudflare Dashboard](https://dash.cloudflare.com/)
 2. Navigate to **R2 Object Storage** in the sidebar
 3. Click **Create Bucket**
-4. Enter your bucket name (e.g., `icare`)
+4. Enter your bucket name (e.g., `alfa`)
 5. Select your preferred location
 6. Click **Create Bucket**
 
@@ -78,12 +78,12 @@ Add the following to your `.env` file:
 CLOUDFLARE_R2_ENABLED=true
 
 # 📝 UPDATE THIS: Your bucket name from Step 1
-CLOUDFLARE_R2_BUCKET=icare
+CLOUDFLARE_R2_BUCKET=alfa
 
-# 📝 UPDATE THIS: Your public bucket URL from Step 1 (Step 2)
-CLOUDFLARE_R2_PUBLIC_URL=pub-cbda444627e344d8b99d3d52bc197128.r2.dev
+# 📝 UPDATE THIS: Your public bucket URL from Step 1 (Step 2) - WITHOUT https://
+CLOUDFLARE_R2_PUBLIC_URL=pub-c6a9b86276ec477db9e7dee9e5acf397.r2.dev
 
-# ⚠️ DO NOT CHANGE: Standard R2 endpoint (use your account ID from dashboard)
+# 📝 UPDATE THIS: R2 endpoint with your account ID
 CLOUDFLARE_R2_BUCKET_ENDPOINT=https://5543538795e940846a189901d1be5a3b.r2.cloudflarestorage.com
 
 # 📝 UPDATE THIS: Access Key from Step 3
@@ -92,19 +92,21 @@ CLOUDFLARE_R2_ACCESS_KEY=426c641a3ebb4cf080535e8e5af4b161
 # 📝 UPDATE THIS: Secret Key from Step 3
 CLOUDFLARE_R2_SECRET_KEY=09a6866c56df5f3e1257577f6a732c3cf98599565672ab3829a74bae086c7706
 
-# ⚠️ DO NOT CHANGE: Your Cloudflare Account ID (from R2 dashboard URL)
+# 📝 UPDATE THIS: Your Cloudflare Account ID (from R2 dashboard)
 CLOUDFLARE_R2_ACCOUNT_ID=5543538795e940846a189901d1be5a3b
 ```
 
 **What to Update:**
-- ✅ `CLOUDFLARE_R2_BUCKET`: Your bucket name
-- ✅ `CLOUDFLARE_R2_PUBLIC_URL`: Your public bucket URL (from Step 1, Step 2)
-- ✅ `CLOUDFLARE_R2_ACCESS_KEY`: Your access key (from Step 1, Step 3)
-- ✅ `CLOUDFLARE_R2_SECRET_KEY`: Your secret key (from Step 1, Step 3)
+- ✅ `CLOUDFLARE_R2_BUCKET`: Your bucket name (e.g., `alfa`)
+- ✅ `CLOUDFLARE_R2_PUBLIC_URL`: Your public bucket URL **without** `https://` (e.g., `pub-xxx.r2.dev`)
+- ✅ `CLOUDFLARE_R2_BUCKET_ENDPOINT`: Replace account ID in the URL
+- ✅ `CLOUDFLARE_R2_ACCESS_KEY`: Your access key (from Step 3)
+- ✅ `CLOUDFLARE_R2_SECRET_KEY`: Your secret key (from Step 3)
+- ✅ `CLOUDFLARE_R2_ACCOUNT_ID`: Your Cloudflare account ID
 
-**What to Keep:**
-- ❌ `CLOUDFLARE_R2_BUCKET_ENDPOINT`: Standard format, just replace account ID
-- ❌ `CLOUDFLARE_R2_ACCOUNT_ID`: Keep as is (from your Cloudflare dashboard)
+**Important Notes:**
+- ⚠️ Public URL should be **domain only** (no `https://` prefix)
+- ⚠️ All credentials come from Cloudflare R2 dashboard
 
 ### Step 3: Load Environment Variables
 Add this at the **top** of your `settings.py` file:
@@ -158,15 +160,16 @@ if CLOUDFLARE_R2_ENABLED:
     # Load R2 credentials from environment
     AWS_ACCESS_KEY_ID = os.getenv('CLOUDFLARE_R2_ACCESS_KEY')
     AWS_SECRET_ACCESS_KEY = os.getenv('CLOUDFLARE_R2_SECRET_KEY')
-    CLOUDFLARE_R2_BUCKET_NAME = os.getenv('CLOUDFLARE_R2_BUCKET')
-    CLOUDFLARE_R2_ENDPOINT = os.getenv('CLOUDFLARE_R2_BUCKET_ENDPOINT')
-    CLOUDFLARE_R2_PUBLIC_URL = os.getenv('CLOUDFLARE_R2_PUBLIC_URL')
-    CLOUDFLARE_R2_ACCOUNT_ID = os.getenv('CLOUDFLARE_R2_ACCOUNT_ID', '')
+    AWS_STORAGE_BUCKET_NAME = os.getenv('CLOUDFLARE_R2_BUCKET')
+    AWS_S3_ENDPOINT_URL = os.getenv('CLOUDFLARE_R2_BUCKET_ENDPOINT')
+    AWS_S3_REGION_NAME = 'auto'  # Cloudflare R2 uses 'auto' region
+    AWS_S3_SIGNATURE_VERSION = 's3v4'  # Required for R2
+    AWS_S3_CUSTOM_DOMAIN = os.getenv('CLOUDFLARE_R2_PUBLIC_URL')
 
-    # Configure Django to use R2 for media files
+    # Configure Django to use R2 for media files (using built-in S3 storage)
     STORAGES = {
         "default": {
-            "BACKEND": "icare_backend.storage_backends.R2MediaStorage",
+            "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
         },
         "staticfiles": {
             "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
@@ -174,10 +177,8 @@ if CLOUDFLARE_R2_ENABLED:
     }
 
     # Set media URL (use public URL if available)
-    if CLOUDFLARE_R2_PUBLIC_URL:
-        MEDIA_URL = f'https://{CLOUDFLARE_R2_PUBLIC_URL}/media/'
-    else:
-        MEDIA_URL = f'{CLOUDFLARE_R2_ENDPOINT}/{CLOUDFLARE_R2_BUCKET_NAME}/media/'
+    if AWS_S3_CUSTOM_DOMAIN:
+        MEDIA_URL = f'https://{AWS_S3_CUSTOM_DOMAIN}/'
 else:
     # Fallback to local file storage
     STORAGES = {
@@ -195,46 +196,54 @@ else:
 **Configuration Explained:**
 - When `CLOUDFLARE_R2_ENABLED=true`: Uses R2 for media storage
 - When `CLOUDFLARE_R2_ENABLED=false`: Uses local filesystem
-- `STORAGES["default"]`: Handles user-uploaded media files
+- `AWS_STORAGE_BUCKET_NAME`: Your R2 bucket name
+- `AWS_S3_ENDPOINT_URL`: R2 API endpoint URL
+- `AWS_S3_REGION_NAME`: Set to `'auto'` for Cloudflare R2
+- `AWS_S3_SIGNATURE_VERSION`: Set to `'s3v4'` (required by R2)
+- `AWS_S3_CUSTOM_DOMAIN`: Your public R2 domain (without `https://`)
+- `STORAGES["default"]`: Uses built-in S3Boto3Storage (no custom backend needed)
 - `STORAGES["staticfiles"]`: Handles static files (CSS, JS, images)
 
 ---
 
-## 6️⃣ Create Custom Storage Backend
+## 6️⃣ No Custom Storage Backend Needed! ✅
 
-Create a new file `storage_backends.py` in your Django app directory (e.g., `icare_backend/storage_backends.py`):
+**Good news!** With the configuration above, you **don't need to create a custom storage backend**. 
+
+The built-in `storages.backends.s3boto3.S3Boto3Storage` works perfectly with Cloudflare R2 when you set:
+- `AWS_S3_ENDPOINT_URL`: Points to R2
+- `AWS_S3_REGION_NAME = 'auto'`: Required for R2
+- `AWS_S3_SIGNATURE_VERSION = 's3v4'`: R2's signature method
+- `AWS_S3_CUSTOM_DOMAIN`: Your public R2 URL
+
+**Why this works:**
+- Cloudflare R2 is **S3-compatible**
+- django-storages' S3Boto3Storage supports custom endpoints
+- No need for custom code when using standard AWS variable names
+
+**Optional: Advanced Customization**
+
+If you need custom behavior (e.g., file naming, ACLs), create `storage_backends.py`:
 
 ```python
-"""
-Custom storage backend for Cloudflare R2 object storage.
-This uses the S3-compatible API provided by Cloudflare R2.
-"""
 from storages.backends.s3boto3 import S3Boto3Storage
-from django.conf import settings
-
 
 class R2MediaStorage(S3Boto3Storage):
-    """
-    Custom storage backend for Cloudflare R2.
-    Inherits from S3Boto3Storage since R2 is S3-compatible.
-    """
-    bucket_name = settings.CLOUDFLARE_R2_BUCKET_NAME
-    custom_domain = settings.CLOUDFLARE_R2_PUBLIC_URL or None
-    endpoint_url = settings.CLOUDFLARE_R2_ENDPOINT
-    access_key = settings.AWS_ACCESS_KEY_ID
-    secret_key = settings.AWS_SECRET_ACCESS_KEY
-    default_acl = 'public-read'  # Make uploaded files publicly accessible
-    file_overwrite = False  # Don't overwrite files with the same name
-    location = 'media'  # Store files in 'media' folder within bucket
+    """Custom settings for R2 storage (optional)"""
+    file_overwrite = False  # Don't overwrite files with same name
+    default_acl = 'public-read'  # Make files public
+    location = 'media'  # Store in media/ subfolder
 ```
 
-**Storage Backend Options:**
-- `bucket_name`: Your R2 bucket name
-- `custom_domain`: Public URL for accessing files
-- `endpoint_url`: R2 API endpoint
-- `default_acl`: Make files public by default
-- `file_overwrite`: Prevent accidental file overwrites
-- `location`: Subfolder within bucket for media files
+Then update `settings.py`:
+```python
+STORAGES = {
+    "default": {
+        "BACKEND": "yourapp.storage_backends.R2MediaStorage",  # Use custom
+    },
+    ...
+}
+```
 
 ---
 
@@ -356,10 +365,12 @@ print("=" * 50)
 print("Cloudflare R2 Configuration Check")
 print("=" * 50)
 
-print(f"\n✓ R2 Enabled: {settings.CLOUDFLARE_R2_ENABLED}")
-print(f"✓ Bucket Name: {getattr(settings, 'CLOUDFLARE_R2_BUCKET_NAME', 'NOT SET')}")
-print(f"✓ Public URL: {getattr(settings, 'CLOUDFLARE_R2_PUBLIC_URL', 'NOT SET')}")
-print(f"✓ Endpoint: {getattr(settings, 'CLOUDFLARE_R2_ENDPOINT', 'NOT SET')}")
+print(f"\n✓ R2 Enabled: {getattr(settings, 'CLOUDFLARE_R2_ENABLED', False)}")
+print(f"✓ Bucket Name: {getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'NOT SET')}")
+print(f"✓ Public URL: {getattr(settings, 'AWS_S3_CUSTOM_DOMAIN', 'NOT SET')}")
+print(f"✓ Endpoint: {getattr(settings, 'AWS_S3_ENDPOINT_URL', 'NOT SET')}")
+print(f"✓ Region: {getattr(settings, 'AWS_S3_REGION_NAME', 'NOT SET')}")
+print(f"✓ Signature: {getattr(settings, 'AWS_S3_SIGNATURE_VERSION', 'NOT SET')}")
 print(f"✓ Access Key: {'SET' if getattr(settings, 'AWS_ACCESS_KEY_ID', None) else 'NOT SET'}")
 print(f"✓ Secret Key: {'SET' if getattr(settings, 'AWS_SECRET_ACCESS_KEY', None) else 'NOT SET'}")
 print(f"✓ Media URL: {settings.MEDIA_URL}")
