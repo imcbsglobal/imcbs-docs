@@ -11,9 +11,11 @@ Centralized documentation for all IMCBS engineering setups and standards. This r
 - **[VPS Hosting](./infra/vps-hosting/)** - Server provisioning, security hardening, and maintenance
 
 ### Application Frameworks
-- **[Django](./application-frameworks/django/)** - Django web framework setup, configuration, and best practices
-- **[Node.js](./application-frameworks/nodejs/)** - Node.js backend development and Express.js setup
-- **[React](./application-frameworks/react/)** - React frontend development, state management, and optimization
+- **[Django](./application-frameworks/django/)** - Beginner-friendly setup, commands, and best practices (from `pip install` to DRF APIs)
+- **[Node.js](./application-frameworks/nodejs/)** - Step-by-step Express REST API setup with env, middleware, auth, and deployment tips
+- **[React](./application-frameworks/react/)** - Vite/CRA setup, hooks, routing, state patterns, and production-ready checks
+
+> All framework guides are designed for **new joiners** with copy-paste commands, clear folder structures, and troubleshooting tips.
 
 ### DevOps & Deployment
 - **[CI/CD Pipelines](./devops/cicd/)** - Continuous Integration and Continuous Deployment workflows
